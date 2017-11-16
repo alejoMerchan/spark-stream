@@ -14,26 +14,32 @@ import org.apache.spark.streaming.{Seconds, StreamingContext}
 object SparkStreamClient extends App {
 
 
-  val kafkaParams = Map(
-    "zookeeper.connect" -> "localhost:2181",
-    "group.id" -> "ulp-ch03-3.3",
-    "zookeeper.connection.timeout.ms" -> "1000")
-
-
-  val sparkConf = new SparkConf().setAppName("kafka-spark-test").setMaster("local[2]")
-  val ssc = new StreamingContext(sparkConf, Seconds(2))
+  val sparkConf = new SparkConf().setAppName("kafka-spark-test").setMaster("local[5]")
+  val ssc = new StreamingContext(sparkConf, Seconds(1))
 
   val topics = "eventos-prueba"
-  val topicMap = topics.split(",").map((_, 1)).toMap
 
+  val stream = KafkaUtils.createStream(ssc, "localhost:2181" , "ulp-ch03-3.3", Map("eventos-prueba" -> 1))
+  stream.cache()
 
-  val stream = KafkaUtils.createStream[String, String, StringDecoder, StringDecoder](ssc, kafkaParams, topicMap,StorageLevel.MEMORY_ONLY_SER)
+  val filtroNegativos = stream.filter(x => x._2.split(":")(1).toInt < 0)
 
-  stream.print()
+  filtroNegativos.foreachRDD {rdd =>
+    if(rdd.isEmpty()) println("-----------------------rdd vacio")
+    else rdd.foreach{
+      x => procesoMensaje(x._2)
+    }
+
+  }
 
   ssc.start()
 
   ssc.awaitTermination()
+
+
+  def procesoMensaje(mensaje:String): Unit ={
+    println("procesando evento: " + mensaje)
+  }
 
 
 }
